@@ -1,0 +1,786 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>North Star Support Bot</title>
+<style>
+  :root {
+    --pine: #1d4d3b;
+    --pine-dark: #143528;
+    --night: #0f2233;
+    --snow: #f7f5f0;
+    --sand: #e9e2d4;
+    --amber: #d98e32;
+    --bot-bubble: #ffffff;
+    --user-bubble: #1d4d3b;
+    --agent-bubble: #123a5c;
+    --text: #22302b;
+    --muted: #6b7a72;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: linear-gradient(160deg, var(--night) 0%, var(--pine-dark) 100%);
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+  }
+  .app {
+    width: 100%;
+    max-width: 480px;
+    height: min(88vh, 760px);
+    background: var(--snow);
+    border-radius: 18px;
+    box-shadow: 0 24px 60px rgba(0,0,0,.45);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  header {
+    background: var(--pine);
+    color: #fff;
+    padding: 14px 18px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .logo {
+    width: 40px; height: 40px;
+    border-radius: 50%;
+    background: var(--night);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 20px;
+    flex-shrink: 0;
+  }
+  .head-text { flex: 1; min-width: 0; }
+  .head-text h1 { font-size: 16px; font-weight: 700; letter-spacing: .2px; }
+  .head-text p { font-size: 12px; opacity: .85; margin-top: 2px; }
+  #modeBadge {
+    font-size: 11px;
+    font-weight: 700;
+    padding: 4px 10px;
+    border-radius: 20px;
+    background: rgba(255,255,255,.18);
+    white-space: nowrap;
+  }
+  #modeBadge.agent { background: var(--amber); color: var(--night); }
+  #resetBtn {
+    background: none; border: 1px solid rgba(255,255,255,.35); color: #fff;
+    border-radius: 8px; padding: 5px 9px; font-size: 11px; cursor: pointer;
+  }
+  #resetBtn:hover { background: rgba(255,255,255,.12); }
+  #chat {
+    flex: 1;
+    overflow-y: auto;
+    padding: 18px 14px 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    scroll-behavior: smooth;
+  }
+  .msg {
+    max-width: 82%;
+    padding: 10px 14px;
+    border-radius: 16px;
+    font-size: 14px;
+    line-height: 1.45;
+    white-space: pre-line;
+    animation: pop .18s ease-out;
+    word-wrap: break-word;
+  }
+  @keyframes pop { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+  .bot {
+    background: var(--bot-bubble);
+    color: var(--text);
+    border: 1px solid var(--sand);
+    border-bottom-left-radius: 4px;
+    align-self: flex-start;
+  }
+  .agent {
+    background: var(--agent-bubble);
+    color: #fff;
+    border-bottom-left-radius: 4px;
+    align-self: flex-start;
+  }
+  .user {
+    background: var(--user-bubble);
+    color: #fff;
+    border-bottom-right-radius: 4px;
+    align-self: flex-end;
+  }
+  .sys {
+    align-self: center;
+    font-size: 11.5px;
+    color: var(--muted);
+    background: var(--sand);
+    border-radius: 20px;
+    padding: 4px 12px;
+    max-width: 90%;
+    text-align: center;
+  }
+  .msg a { color: var(--pine); font-weight: 600; }
+  .agent a { color: #ffd9a0; }
+  .typing {
+    align-self: flex-start;
+    background: var(--bot-bubble);
+    border: 1px solid var(--sand);
+    border-radius: 16px;
+    border-bottom-left-radius: 4px;
+    padding: 12px 16px;
+    display: flex; gap: 5px;
+  }
+  .typing span {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--muted);
+    animation: blink 1.2s infinite;
+  }
+  .typing span:nth-child(2) { animation-delay: .2s; }
+  .typing span:nth-child(3) { animation-delay: .4s; }
+  @keyframes blink { 0%, 60%, 100% { opacity: .25; } 30% { opacity: 1; } }
+  #chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 8px 14px;
+  }
+  .chip {
+    background: #fff;
+    border: 1.5px solid var(--pine);
+    color: var(--pine);
+    border-radius: 20px;
+    padding: 7px 14px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all .12s;
+  }
+  .chip:hover { background: var(--pine); color: #fff; }
+  form {
+    display: flex;
+    gap: 8px;
+    padding: 12px 14px 14px;
+    background: #fff;
+    border-top: 1px solid var(--sand);
+  }
+  #inp {
+    flex: 1;
+    border: 1.5px solid var(--sand);
+    border-radius: 24px;
+    padding: 11px 16px;
+    font-size: 14px;
+    outline: none;
+  }
+  #inp:focus { border-color: var(--pine); }
+  #sendBtn {
+    background: var(--pine);
+    color: #fff;
+    border: none;
+    border-radius: 50%;
+    width: 44px; height: 44px;
+    font-size: 17px;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  #sendBtn:hover { background: var(--pine-dark); }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="logo">🏔️</div>
+    <div class="head-text">
+      <h1>North Star Support Bot</h1>
+      <p>Outdoor apparel &amp; camping gear · here to help</p>
+    </div>
+    <div id="modeBadge">🤖 Bot</div>
+    <button id="resetBtn" title="Restart the conversation">↺ Reset</button>
+  </header>
+  <div id="chat" aria-live="polite"></div>
+  <div id="chips"></div>
+  <form id="f" autocomplete="off">
+    <input id="inp" type="text" placeholder="Type a message..." aria-label="Type a message">
+    <button id="sendBtn" type="submit" aria-label="Send">➤</button>
+  </form>
+</div>
+
+<script>
+/* =========================================================================
+   North Star Support Bot
+   A deterministic customer-support chatbot for a fictional outdoor
+   apparel & camping gear store. No API keys, no network calls, no
+   dependencies: open this file in any modern browser and it runs.
+
+   Structure:
+     1. MOCK DATA        - order statuses & policies exactly as provided
+     2. INTENT ENGINE    - keyword/phrase matching with many variations
+     3. STATE MACHINE    - guided flows, fallback, live-agent handoff
+     4. UI LAYER         - chat rendering, quick-reply chips, typing dots
+   ========================================================================= */
+
+/* ------------------------- 1. MOCK DATA (verbatim) ---------------------- */
+const ORDERS = {
+  "111": "Good news! Order #111 has SHIPPED and is arriving tomorrow. 🎒",
+  "222": "Order #222 is PROCESSING and will ship within the next 24 hours.",
+  "333": "Order #333 shows as DELIVERED. 📦"
+};
+const DELIVERED_FOLLOWUP =
+  "Since it's marked delivered, is everything OK with your order?\n" +
+  "If anything's wrong, I can walk you through a return or connect you with a live agent.";
+
+const RETURN_POLICY =
+  "Our return policy is simple:\n" +
+  "• 30-day returns\n" +
+  "• Items must be unused\n" +
+  "• Original packaging is required\n\n" +
+  "Start your return here: https://northstar-outdoors.example.com/returns";
+
+const SHIPPING_INFO =
+  "Here are our shipping options:\n" +
+  "• Standard shipping: 3-5 business days\n" +
+  "• Expedited shipping: 1-2 business days";
+
+/* Product recommendation matrix: activity + condition -> category */
+const RECO = {
+  hiking:   { warm: "lightweight trail apparel and breathable hiking footwear",
+              cold: "insulated hiking apparel and waterproof trail boots" },
+  camping:  { warm: "3-season tents and lightweight sleep systems",
+              cold: "4-season tents and cold-weather sleeping bags" },
+  climbing: { warm: "climbing apparel and approach shoes",
+              cold: "insulated softshells and cold-weather climbing layers" },
+  winter:   { any:  "snow apparel, insulated boots, and winter accessories" }
+};
+
+/* ------------------------- 2. INTENT ENGINE ----------------------------- */
+/* Each intent lists phrase fragments. Input is normalized (lowercase,
+   punctuation stripped) and an intent matches if any fragment appears.
+   Order of checks handles priority (e.g., explicit agent request wins). */
+const INTENTS = {
+  agent: ["live agent","human","real person","talk to someone","speak to someone",
+          "talk to a person","speak to a person","speak with someone","talk with someone",
+          "representative","agent","agents","customer service","connect me",
+          "customer service person","someone real","operator","supervisor","escalate"],
+  track: ["where is my order","wheres my order","track my package","track package",
+          "track my order","track order","order status","status of my order",
+          "find my order","check my order","package status","wheres my stuff",
+          "where is my package","wheres my package","my delivery","shipment status",
+          "track my stuff","hasnt arrived","not arrived","didnt arrive","late order",
+          "order tracking","track","tracking","my package","arrive","arriving",
+          "when will my order","when will my package","where is order","wheres order",
+          "check order","status of order","status on order","order number",
+          "when will order","find order","my order","never arrived","never showed",
+          "never came","never got","not delivered","not received","havent received",
+          "didnt receive","dont have it","update on order","update on my order",
+          "order update","my purchase","wheres my","where is my"],
+  returns: ["return","returns","returning","exchange","exchanges","refund","refunds",
+            "send back","send it back","money back","doesnt fit","wrong size","broken",
+            "damaged","defective","return policy","broke","ripped","torn","faulty"],
+  shipping: ["shipping","delivery time","how long to ship","ship time","delivery options",
+             "how fast","expedited","standard delivery","shipping cost","when will it ship",
+             "how long does delivery","shipping info","delivery"],
+  recommend: ["recommend","recommendation","recommendations","suggestion","suggestions",
+              "suggest","looking for","what should i buy","what should i get",
+              "help me choose","help me pick","gift","present","which product",
+              "shopping for","need gear","need equipment","browse","what do you sell",
+              "show me products","buy something","recommend a product","want to buy",
+              "buy a","in the market for"],
+  menu: ["menu","main menu","start over","what can you do",
+         "go back to menu","back to menu","return to main menu","return to menu"],
+  greet: ["hello","hi","hey","good morning","good afternoon","good evening","howdy","yo"],
+  thanks: ["thank","thanks","thank you","thx","appreciate","awesome","perfect"],
+  bye: ["bye","goodbye","see you","later","im done","thats all","that is all","no thats it"],
+  yes: ["yes","yeah","yep","sure","ok","okay","yup","correct","fine",
+        "everythings fine","everything is fine","all good","its fine"],
+  no: ["no","nope","nah","not really","im good","no thanks","nothing"]
+};
+
+function normalize(t) {
+  return " " + t.toLowerCase()
+    .replace(/['’]/g, "")            /* strip apostrophes: "where's" -> "wheres" */
+    .replace(/[^a-z0-9# ]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim() + " ";
+}
+/* Whole-word / whole-phrase matching: every pattern must appear surrounded
+   by spaces in the normalized text, so "back" never matches "backpacking". */
+function hasIntent(text, name) {
+  const n = normalize(text);
+  return INTENTS[name].some(p => n.includes(" " + p + " "));
+}
+function matchIntent(text, names) {
+  for (const name of names) if (hasIntent(text, name)) return name;
+  return null;
+}
+function extractOrderNumber(text) {
+  const m = text.replace(/#/g, " ").match(/\b(\d{1,10})\b/);
+  return m ? m[1] : null;
+}
+
+/* ------------------------- 3. STATE MACHINE ----------------------------- */
+let state = "MENU";          // MENU | AWAIT_ORDER | DELIVERED_FU | RECO_ACTIVITY | RECO_COND | AGENT
+let recoActivity = null;
+let fallbackCount = 0;
+
+const MENU_CHIPS = ["📦 Track my order", "↩️ Returns & exchanges", "🧭 Recommend a product", "🚚 Shipping info", "🧑‍💼 Talk to a live agent"];
+
+function showMenu(intro) {
+  state = "MENU";
+  fallbackCount = 0;
+  bot((intro ? intro + "\n\n" : "") + "Here's what I can help with — tap an option or just type:");
+  chips(MENU_CHIPS);
+}
+
+function goAgent() {
+  state = "AGENT";
+  fallbackCount = 0;
+  setMode("agent");
+  sys("Transferring you to a live agent...");
+  agentSay("Hi, this is Riley from North Star Support (simulated live agent). 👋 I've got your conversation history right here. How can I help?");
+  chips(["⬅️ Return to main menu"]);
+}
+
+/* Activity / condition detection shared by the recommendation flow, so details
+   the user already gave ("what should I buy for camping?", "winter camping")
+   are used instead of re-asked. "ski" is matched as a whole word only —
+   substring matching would false-positive on words like "asking". */
+function detectActivity(n) {
+  if (n.includes("hik") || n.includes("trail") || n.includes("backpack")) return "hiking";
+  if (n.includes("camp") || n.includes("tent") || n.includes("sleep")) return "camping";
+  if (n.includes("climb") || n.includes("boulder")) return "climbing";
+  if (n.includes("winter") || n.includes("snow") ||
+      n.includes(" ski ") || n.includes(" skis ") || n.includes(" skiing ")) return "winter";
+  return null;
+}
+function detectCondition(n, lenient) {
+  /* Strict mode (pre-seeding from a full sentence): "warm" only counts with
+     weather context, because "a warm sleeping bag" is COLD-weather gear.
+     Lenient mode (answering the direct warm-or-cold question): bare "warm" is
+     an answer. "Cold" never inverts, so it stays broad in both modes. */
+  if (n.includes("warm weather") || n.includes("warmer") || n.includes("summer") ||
+      n.includes("mild") || n.includes("warm conditions") || n.includes("warm climate") ||
+      n.includes("somewhere warm") || n.includes("be warm") || n.includes("its warm") ||
+      n.includes(" hot ") ||
+      (lenient && n.includes("warm"))) return "warm";
+  if (n.includes("cold") || n.includes("winter") || n.includes("snow") || n.includes("freez")) return "cold";
+  return null;
+}
+/* Entry point for a recommendation request: pre-seed whatever the message
+   already tells us and only ask the questions that remain. */
+function startReco(text) {
+  const n = normalize(text);
+  const act = detectActivity(n);
+  if (!act) {
+    state = "RECO_ACTIVITY";
+    bot("Love it — let's find you the right gear. What kind of adventure are you gearing up for? 🧭");
+    return chips(["Hiking", "Camping", "Climbing", "Winter sports"]);
+  }
+  return resolveReco(act, n);
+}
+function resolveReco(act, n) {
+  recoActivity = act;
+  fallbackCount = 0;
+  if (act === "winter") {
+    bot("Great choice! For winter adventures, I'd point you to our " + RECO.winter.any + ". ❄️\n\n" + SHIPPING_INFO);
+    return showMenu("Want help with anything else?");
+  }
+  const cond = detectCondition(n);
+  if (cond) {
+    bot("Perfect — for " + act + " in " + cond + " conditions, I'd recommend our " + RECO[act][cond] + ". 🌟\n\n" + SHIPPING_INFO);
+    return showMenu("Can I help with anything else?");
+  }
+  state = "RECO_COND";
+  bot("Nice! And will you be out in warmer weather or colder conditions?");
+  return chips(["Warm weather ☀️", "Cold weather ❄️"]);
+}
+
+function handle(raw) {
+  const text = raw.trim();
+  if (!text) return;
+  user(text);
+
+  /* ---- Global interrupts: work from any state except the agent chat,
+         which manages its own exits so words like "help" don't eject the user ---- */
+  if (state !== "AGENT" && hasIntent(text, "agent")) return goAgent();
+  if (state !== "AGENT" && hasIntent(text, "menu")) { setMode("bot"); return showMenu("You got it."); }
+
+  switch (state) {
+
+    case "AGENT": {
+      // In the simulated live-agent state the user may keep chatting or return.
+      // Exit ONLY on an explicit menu/goodbye request, so ordinary replies like
+      // "nothing major" or "no problem, one more thing" don't kick them out.
+      if (hasIntent(text, "menu") || hasIntent(text, "bye")) {
+        setMode("bot");
+        sys("You're back with the North Star Support Bot.");
+        return showMenu("Welcome back!");
+      }
+      agentSay("Thanks — I've noted that. ✍️ In this simulation a specialist would take it from here. Anything else, or would you like to return to the main menu?");
+      return chips(["⬅️ Return to main menu"]);
+    }
+
+    case "AWAIT_ORDER": {
+      /* After two misses the bot offers a live agent — a typed "yes" accepts. */
+      if (fallbackCount >= 2 && hasIntent(text, "yes")) return goAgent();
+      /* Fresh request instead of an order number (e.g. "actually, I want to
+         return something", "recommend 2 tents") -> honor it rather than
+         reading its digits as an order number or nagging for one. */
+      if (hasIntent(text, "returns") || hasIntent(text, "recommend") || hasIntent(text, "shipping")) {
+        state = "MENU";
+        return menuRoute(text);
+      }
+      const num = extractOrderNumber(text);
+      if (num && ORDERS[num]) {
+        fallbackCount = 0;
+        bot(ORDERS[num]);
+        if (num === "333") { state = "DELIVERED_FU"; bot(DELIVERED_FOLLOWUP); return chips(["Everything's fine 👍", "Start a return", "🧑‍💼 Talk to a live agent"]); }
+        return showMenu("Anything else I can help with?");
+      }
+      if (num) {
+        fallbackCount = 0;
+        bot("Hmm, I couldn't find order #" + num + " — that looks like an invalid order number. 🤔\nIt's the 3-digit number on your confirmation email. Want to try again?");
+        return chips(["Try another number", "⬅️ Main menu", "🧑‍💼 Talk to a live agent"]);
+      }
+      const nA = normalize(text);
+      if (hasIntent(text, "no") || hasIntent(text, "bye") || nA.includes("cancel") ||
+          nA.includes("nevermind") || nA.includes("never mind") || nA.includes(" go back ") ||
+          nA.includes("forget it")) return showMenu("No problem!");
+      fallbackCount++;
+      if (fallbackCount >= 2) {
+        bot("I still didn't catch an order number. 😅 It's the 3-digit number on your confirmation email — or I can connect you with a live agent.");
+        return chips(["111", "222", "333", "🧑‍💼 Talk to a live agent", "⬅️ Main menu"]);
+      }
+      bot("Just send me the order number itself, like 111. It's on your confirmation email. 🙂");
+      return chips(["111", "222", "333", "⬅️ Main menu"]);
+    }
+
+    case "DELIVERED_FU": {
+      const n = normalize(text);
+      /* Positive idioms first: "no problems at all" / "nothing wrong" contain
+         complaint words and must never be read as complaints. Guarded so
+         "no, it's NOT all good" or "...except the zipper broke" still complain. */
+      if (!n.includes(" not ") && !hasIntent(text, "returns") &&
+          (n.includes("no problem") || n.includes("no issue") || n.includes("no complaints") ||
+           n.includes("nothing wrong") || n.includes("nothing is wrong") || n.includes("all good") ||
+           n.includes("looks good") || n.includes("looks great") || n.includes("no worries") ||
+           n.includes(" im good "))) {
+        fallbackCount = 0;
+        return showMenu("Glad to hear it! 🏔️");
+      }
+      /* Shows delivered but the customer doesn't have it -> hand straight to a
+         human, as promised in the message (so a follow-up "yes please" can't
+         be misread as "everything's fine"). */
+      if (n.includes("didnt arrive") || n.includes("hasnt arrived") || n.includes("not arrived") ||
+          n.includes("never arrived") || n.includes("never came") || n.includes("never showed") ||
+          n.includes("didnt get it") || n.includes("never got") || n.includes("dont have it") ||
+          n.includes("not received") || n.includes("havent received") || n.includes("didnt receive")) {
+        fallbackCount = 0;
+        bot("That's concerning — it shows as delivered but you don't have it. 😟 Let me get a live agent to look into it for you.");
+        return goAgent();
+      }
+      /* Complaints and negations: "no, it's not ok" / "that doesn't seem right" /
+         "it was fine but late" must never read as "everything's fine" */
+      if (hasIntent(text, "no") || n.includes(" not ") || n.includes(" doesnt ") || n.includes(" dont ") ||
+          n.includes(" isnt ") || n.includes(" wasnt ") || n.includes(" late ") ||
+          hasIntent(text, "returns") || n.includes("wrong") || n.includes("problem") || n.includes("issue") || n.includes("missing")) {
+        fallbackCount = 0;
+        bot("Sorry it wasn't perfect!\n\n" + RETURN_POLICY);
+        return showMenu("Anything else?");
+      }
+      /* A message carrying an order number ("track order 999", "where is 222",
+         bare "111") is a fresh request about ANOTHER order -> honor it. */
+      const fuNum = extractOrderNumber(text);
+      const fuBareish = fuNum && n.replace(/[0-9# ]/g, "").trim().length <= 6;
+      if (fuNum && (fuBareish || hasIntent(text, "track") || hasIntent(text, "recommend") || hasIntent(text, "shipping"))) {
+        state = "MENU";
+        return menuRoute(text);
+      }
+      /* Yes-answers BEFORE number-less topic matching: "yes my order is fine"
+         mentions "my order" but is an answer to our question, not a request. */
+      if (hasIntent(text, "yes") || hasIntent(text, "thanks")) {
+        fallbackCount = 0;
+        return showMenu("Glad to hear it! 🏔️");
+      }
+      /* Number-less fresh request ("recommend a tent", "how fast is shipping") */
+      if (hasIntent(text, "track") || hasIntent(text, "recommend") || hasIntent(text, "shipping")) {
+        state = "MENU";
+        return menuRoute(text);
+      }
+      bot("If anything's wrong with the delivered order I can help with a return, or connect you with a live agent.");
+      return chips(["Start a return", "🧑‍💼 Talk to a live agent", "⬅️ Main menu"]);
+    }
+
+    case "RECO_ACTIVITY": {
+      const n = normalize(text);
+      /* After two misses the bot offers a live agent — a typed "yes" accepts. */
+      if (fallbackCount >= 2 && hasIntent(text, "yes")) return goAgent();
+      /* "cancel" / "nevermind" -> drop the flow gracefully. */
+      if (n.includes("cancel") || n.includes("nevermind") || n.includes("never mind") ||
+          n.includes("forget it") || n.includes(" go back ")) return showMenu("No problem!");
+      /* Topic switch mid-flow ("track my order", "return something", an order
+         number) -> honor it instead of forcing the activity question. */
+      const rNum = extractOrderNumber(text);
+      const rBareish = rNum && n.replace(/[0-9# ]/g, "").trim().length <= 6;
+      if (rBareish || hasIntent(text, "track") || hasIntent(text, "returns") || hasIntent(text, "shipping")) {
+        state = "MENU";
+        return menuRoute(text);
+      }
+      const act = detectActivity(n);
+      if (!act) {
+        fallbackCount++;
+        if (fallbackCount >= 2) {
+          bot("Which of these is closest to your adventure? 🧭 Or if you'd rather, I can connect you with a live agent.");
+          return chips(["Hiking", "Camping", "Climbing", "Winter sports", "🧑‍💼 Talk to a live agent", "⬅️ Main menu"]);
+        }
+        bot("Which of these is closest to your adventure? 🧭");
+        return chips(["Hiking", "Camping", "Climbing", "Winter sports", "⬅️ Main menu"]);
+      }
+      return resolveReco(act, n);
+    }
+
+    case "RECO_COND": {
+      const n = normalize(text);
+      /* Same agent-offer acceptance and cancel escape as RECO_ACTIVITY. */
+      if (fallbackCount >= 2 && hasIntent(text, "yes")) return goAgent();
+      if (n.includes("cancel") || n.includes("nevermind") || n.includes("never mind") ||
+          n.includes("forget it") || n.includes(" go back ")) return showMenu("No problem!");
+      /* Same topic-switch escape as RECO_ACTIVITY. */
+      const cNum = extractOrderNumber(text);
+      const cBareish = cNum && n.replace(/[0-9# ]/g, "").trim().length <= 6;
+      if (cBareish || hasIntent(text, "track") || hasIntent(text, "returns") || hasIntent(text, "shipping")) {
+        state = "MENU";
+        return menuRoute(text);
+      }
+      const cond = detectCondition(n, true); /* lenient: bare "warm" answers the direct question */
+      if (!cond) {
+        fallbackCount++;
+        if (fallbackCount >= 2) {
+          bot("Warmer or colder conditions? That helps me pick the right category. 🌡️ Or I can connect you with a live agent.");
+          return chips(["Warm weather ☀️", "Cold weather ❄️", "🧑‍💼 Talk to a live agent", "⬅️ Main menu"]);
+        }
+        bot("Warmer or colder conditions? That helps me pick the right category. 🌡️");
+        return chips(["Warm weather ☀️", "Cold weather ❄️", "⬅️ Main menu"]);
+      }
+      fallbackCount = 0;
+      const cat = RECO[recoActivity][cond];
+      bot("Perfect — for " + recoActivity + " in " + cond + " conditions, I'd recommend our " + cat + ". 🌟\n\n" + SHIPPING_INFO);
+      return showMenu("Can I help with anything else?");
+    }
+
+    default:
+      return menuRoute(text);
+  }
+}
+
+/* Free-text routing used from the MENU state, and delegated to from a follow-up
+   state when the user makes a fresh request (e.g. tracking a different order
+   while on the "is your delivered order OK?" prompt). Returns is checked before
+   track so "return my order" reads as a return, not a tracking request. */
+function menuRoute(text) {
+  /* Bare order number (or "order 111") with no verb -> treat as tracking.
+     Many users paste the number first. Only fires when the message is
+     essentially just a number, so it can't hijack "recommend 2 tents". */
+  const bareNum = extractOrderNumber(text);
+  if (bareNum && !hasIntent(text, "returns") && !hasIntent(text, "recommend") &&
+      normalize(text).replace(/[0-9# ]/g, "").trim().length <= 6) {
+    fallbackCount = 0;
+    if (ORDERS[bareNum]) {
+      bot(ORDERS[bareNum]);
+      if (bareNum === "333") { state = "DELIVERED_FU"; bot(DELIVERED_FOLLOWUP); return chips(["Everything's fine 👍", "Start a return", "🧑‍💼 Talk to a live agent"]); }
+      return showMenu("Anything else I can help with?");
+    }
+    bot("Hmm, I couldn't find order #" + bareNum + " — that looks like an invalid order number. 🤔\nIt's the 3-digit number on your confirmation email. Want to try again?");
+    state = "AWAIT_ORDER";
+    return chips(["Try another number", "⬅️ Main menu", "🧑‍💼 Talk to a live agent"]);
+  }
+  /* Cancellation asks: be honest — the bot can't cancel, a human can. Checked
+     before intent matching so "cancel my order" isn't misread as tracking. */
+  if (normalize(text).includes("cancel")) {
+    fallbackCount = 0;
+    bot("I can't cancel an order myself, but a live agent can take care of that for you right away.");
+    return chips(["🧑‍💼 Talk to a live agent", "⬅️ Main menu"]);
+  }
+  const intent = matchIntent(text, ["returns", "track", "recommend", "shipping", "greet", "thanks", "bye"]);
+  if (intent) fallbackCount = 0;
+  switch (intent) {
+    case "track": {
+      /* If the user already included their order number, answer directly. */
+      const inlineNum = extractOrderNumber(text);
+      if (inlineNum && ORDERS[inlineNum]) {
+        bot(ORDERS[inlineNum]);
+        if (inlineNum === "333") { state = "DELIVERED_FU"; bot(DELIVERED_FOLLOWUP); return chips(["Everything's fine 👍", "Start a return", "🧑‍💼 Talk to a live agent"]); }
+        return showMenu("Anything else I can help with?");
+      }
+      if (inlineNum) {
+        bot("Hmm, I couldn't find order #" + inlineNum + " — that looks like an invalid order number. 🤔\nIt's the 3-digit number on your confirmation email. Want to try again?");
+        state = "AWAIT_ORDER";
+        return chips(["Try another number", "⬅️ Main menu", "🧑‍💼 Talk to a live agent"]);
+      }
+      state = "AWAIT_ORDER";
+      bot("Happy to check on that! What's your order number? 📦");
+      return chips(["111", "222", "333"]);
+    }
+    case "returns":
+      bot(RETURN_POLICY);
+      return showMenu("Anything else?");
+    case "shipping":
+      bot(SHIPPING_INFO);
+      return showMenu("Anything else?");
+    case "recommend":
+      return startReco(text);
+    case "greet":
+      return showMenu("Hey there, adventurer! 👋 Welcome to North Star.");
+    case "thanks":
+      return showMenu("Anytime! 🏔️");
+    case "bye":
+      bot("Happy trails! Come back any time. 🌲");
+      return chips(["⬅️ Main menu"]);
+    default: {
+      /* Unmatched sentences containing "help"/"options" get the menu, not a fallback.
+         (Specific asks like "help me choose a gift" already matched their intent above.) */
+      const n2 = normalize(text);
+      if (n2.includes(" help ") || n2.includes(" options ")) return showMenu("Happy to help!");
+      /* Answers to the bot's own questions. After two misses the bot ASKS
+         "would you like me to connect you with a live agent?" — so "yes" here
+         must connect, and "no" must gracefully drop back to the menu. */
+      if (fallbackCount >= 2 && hasIntent(text, "yes")) return goAgent();
+      if (fallbackCount >= 2 && hasIntent(text, "no")) return showMenu("No problem!");
+      /* Every resolved flow ends with "Anything else I can help with?" —
+         a plain "yes" re-opens the menu, a plain "no" closes politely. */
+      if (hasIntent(text, "yes")) return showMenu("Sure — take your pick:");
+      if (hasIntent(text, "no")) {
+        fallbackCount = 0;
+        bot("No problem — I'm right here if you need anything else. 👍");
+        return chips(MENU_CHIPS);
+      }
+      /* A product or activity word on its own ("camping", "tents", "snowboarding")
+         is a shopping signal -> route into the recommendation flow. */
+      const act2 = detectActivity(n2);
+      if (act2) { fallbackCount = 0; return resolveReco(act2, n2); }
+      /* ---------- Fallback handling ---------- */
+      fallbackCount++;
+      if (fallbackCount >= 2) {
+        bot("Sorry — I'm still not understanding. 😅 I don't want to hold you up: would you like me to connect you with a live agent, or pick an option below?");
+        return chips(["🧑‍💼 Talk to a live agent", ...MENU_CHIPS.slice(0, 3)]);
+      }
+      bot("I didn't quite catch that. 🤔 I'm best at the topics below — tap one or rephrase:");
+      return chips(MENU_CHIPS);
+    }
+  }
+}
+
+/* ------------------------- 4. UI LAYER ---------------------------------- */
+const chat = document.getElementById("chat");
+const chipsEl = document.getElementById("chips");
+const form = document.getElementById("f");
+const inp = document.getElementById("inp");
+const modeBadge = document.getElementById("modeBadge");
+
+function scrollDown() { chat.scrollTop = chat.scrollHeight; }
+function escapeHTML(s) {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+}
+function bubble(cls, text) {
+  const d = document.createElement("div");
+  d.className = "msg " + cls;
+  // Fully escape first (so no user input can inject markup or break out of an
+  // attribute), THEN linkify bare URLs. The URL token is already escaped, so a
+  // crafted URL containing quotes cannot escape the href attribute.
+  d.innerHTML = escapeHTML(text)
+    .replace(/(https?:\/\/[^\s&]+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>');
+  chat.appendChild(d);
+  scrollDown();
+}
+let queue = Promise.resolve();
+let gen = 0; /* bumped on Reset so in-flight replies from the old conversation are dropped */
+/* enqueue() wraps every step in a catch so a single throw can never freeze the
+   whole render chain (queue rejection would otherwise skip all later .then's). */
+function enqueue(fn) { queue = queue.then(() => { try { return fn(); } catch (e) { /* keep chain alive */ } }).catch(() => {}); }
+function delayed(cls, text, ms) {
+  const g = gen;
+  /* The watchdog race guarantees every queue step settles (ms + 2500ms worst
+     case) so the render chain can never wedge, whatever a step does. */
+  queue = queue.then(() => Promise.race([
+    new Promise(res => {
+      if (g !== gen) return res();
+      const t = document.createElement("div");
+      t.className = "typing";
+      t.innerHTML = "<span></span><span></span><span></span>";
+      chat.appendChild(t); scrollDown();
+      setTimeout(() => { try { t.remove(); if (g === gen) bubble(cls, text); } catch (e) {} res(); }, ms);
+    }),
+    new Promise(res => setTimeout(res, ms + 2500))
+  ])).catch(() => {});
+}
+function bot(text)      { delayed("bot", text, 550); }
+function agentSay(text) { delayed("agent", "🧑‍💼 " + text, 800); }
+function user(text) {
+  chipsEl.innerHTML = "";
+  const g = gen;
+  enqueue(() => { if (g === gen) bubble("user", text); });
+}
+function sys(text) {
+  const g = gen;
+  enqueue(() => { if (g === gen) bubble("sys", text); });
+}
+function chips(list) {
+  const g = gen;
+  enqueue(() => {
+    if (g !== gen) return;
+    chipsEl.innerHTML = "";
+    list.forEach(label => {
+      const b = document.createElement("button");
+      b.className = "chip";
+      b.type = "button";
+      b.textContent = label;
+      b.onclick = () => handle(label.replace(/[^\w\s#'&-]/g, "").trim());
+      chipsEl.appendChild(b);
+    });
+    scrollDown();
+    /* Keyboard users: after chips re-render, keep focus in the flow (on the
+       text input) instead of leaving it stranded on <body>. */
+    inp.focus();
+  });
+}
+function setMode(m) {
+  queue = queue.then(() => {
+    if (m === "agent") { modeBadge.textContent = "🧑‍💼 Live Agent"; modeBadge.classList.add("agent"); }
+    else { modeBadge.textContent = "🤖 Bot"; modeBadge.classList.remove("agent"); }
+  }).catch(() => {});
+}
+
+form.addEventListener("submit", e => {
+  e.preventDefault();
+  const v = inp.value;
+  inp.value = "";
+  handle(v);
+});
+/* Belt-and-suspenders: some environments deliver Enter without triggering
+   the form submit event, so handle it explicitly too. */
+inp.addEventListener("keydown", e => {
+  if (e.key === "Enter") {
+    e.preventDefault();
+    const v = inp.value;
+    inp.value = "";
+    handle(v);
+  }
+});
+document.getElementById("resetBtn").onclick = () => {
+  gen++; /* invalidate any in-flight delayed replies from the old conversation */
+  chat.innerHTML = ""; chipsEl.innerHTML = "";
+  state = "MENU"; recoActivity = null; fallbackCount = 0;
+  queue = Promise.resolve();
+  setMode("bot");
+  boot();
+};
+
+function boot() {
+  bot("Hey there, adventurer! 👋 I'm the North Star Support Bot — your guide for orders, returns, gear picks, and more.");
+  showMenu();
+}
+boot();
+</script>
+</body>
+</html>
