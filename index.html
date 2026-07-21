@@ -262,26 +262,10 @@ const INTENTS = {
           "talk to a person","speak to a person","speak with someone","talk with someone",
           "representative","agent","agents","customer service","connect me",
           "customer service person","someone real","operator","supervisor","escalate"],
-  track: ["where is my order","wheres my order","track my package","track package",
-          "track my order","track order","order status","status of my order",
-          "find my order","check my order","package status","wheres my stuff",
-          "where is my package","wheres my package","shipment status",
-          "track my stuff","hasnt arrived","not arrived","didnt arrive","late order",
-          "order tracking","track","tracking","my package","arrive","arriving",
-          "when will my order","when will my package","where is order","wheres order",
-          "check order","status of order","status on order","order number",
-          "when will order","find order","my order","never arrived","never showed",
-          "never came","never got","not delivered","not received","havent received",
-          "didnt receive","dont have it","update on order","update on my order",
-          "order update","my purchase",
-          /* "Where is my X" is only a tracking request when X is something we
-             actually ship. A bare "where is my ..." pattern would swallow any
-             unknown noun ("where is my <abc>") into the tracking flow, so each
-             trackable noun is listed explicitly and anything else falls back. */
-          "where is my delivery","wheres my delivery","where is my shipment","wheres my shipment",
-          "where is my parcel","wheres my parcel","where is my item","wheres my item",
-          "where is my purchase","wheres my purchase","where is my stuff",
-          "where are my orders","wheres my orders","where are my items"],
+  /* Tracking is NOT a flat keyword list. A single ambiguous word decided the
+     intent before, so "track pants" became an order lookup and "Where is my
+     <abc>?" was treated as a valid request. Tracking now needs a SUBJECT (the
+     thing being tracked) plus a CUE (the question being asked) - see isTrack. */
   returns: ["return","returns","returning","exchange","exchanges","refund","refunds",
             "send back","send it back","money back","doesnt fit","wrong size","broken",
             "damaged","defective","return policy","broke","ripped","torn","faulty"],
@@ -297,8 +281,13 @@ const INTENTS = {
   menu: ["menu","main menu","start over","what can you do",
          "go back to menu","back to menu","return to main menu","return to menu"],
   greet: ["hello","hi","hey","good morning","good afternoon","good evening","howdy","yo"],
-  thanks: ["thank","thanks","thank you","thx","appreciate","awesome","perfect"],
-  bye: ["bye","goodbye","see you","later","im done","thats all","that is all","no thats it"],
+  /* Strong tokens mean gratitude/goodbye in any sentence. Weak ones are ordinary
+     adjectives and adverbs ("perfect for winter?", "can I change it later?") and
+     only count when the message is essentially just that word. */
+  thanks: ["thank","thanks","thank you","thanks a lot","thx","appreciate it"],
+  thanksWeak: ["perfect","awesome","great","nice","excellent"],
+  bye: ["bye","goodbye","im done","thats all","that is all","no thats it"],
+  byeWeak: ["later","see you","see ya","catch you later"],
   yes: ["yes","yeah","yep","sure","ok","okay","yup","correct","fine",
         "everythings fine","everything is fine","all good","its fine"],
   no: ["no","nope","nah","not really","im good","no thanks","nothing"]
@@ -328,10 +317,55 @@ function matchIntent(text, names) {
    that answer, so anything longer falls through to intent matching and, if
    still unrecognized, to the fallback rather than being mistaken for
    agreement, refusal, thanks, or goodbye. */
-function isAnswer(text, name) {
+function isAnswer(text, name, maxWords) {
   const n = normalize(text).trim();
-  if (!n) return false;
-  return n.split(/\s+/).length <= 5 && hasIntent(text, name);
+  if (!n || !hasIntent(text, name)) return false;
+  if (n.split(/\s+/).length <= (maxWords || 5)) return true;
+  /* A longer message still counts when it OPENS with an unambiguous reply,
+     e.g. "yes, everything is fine, thank you so much". Words like "ok" are
+     deliberately excluded here ("ok so where is my order" is a request). */
+  if (!/^(yes|yeah|yep|yup|no|nope|nah|thanks|thank you|goodbye|bye)\b/.test(n)) return false;
+  /* ...but only when the rest of the message is not itself a request, so
+     "thanks but where is my order" is handled as the tracking request it is. */
+  return !isTrack(text) && !matchIntent(text, ["returns", "recommend", "shipping"]);
+}
+
+/* ---- Tracking intent: SUBJECT + CUE ------------------------------------
+   A tracking request names something shippable (order, package, delivery, or
+   the pronoun standing in for it) AND asks a tracking question (where, when,
+   status, arrived, shipped, late). Requiring both is what stops an unknown
+   noun ("where is my <abc>?") or a product name ("track pants", "when does
+   the winter collection arrive") from being mistaken for an order lookup. */
+const TRACK_SUBJECT = /\b(orders?|packages?|parcels?|shipments?|deliver(y|ies)|items?|purchases?|stuff|box|mine)\b/;
+const TRACK_PRONOUN = /\b(it|this|that|they|them|these|those)\b/;
+const TRACK_CUE     = /\b(where|wheres|when|track|tracking|trackin|status|update|updates|check|find|locate|arrive|arrives|arriving|arrived|ship|ships|shipped|deliver|delivered|late|missing|lost|eta)\b/;
+/* A pronoun standing in for the order ("when is it arriving?") needs a
+   delivery-specific cue; "where"/"when" alone would catch idle chatter
+   like "when will it stop raining". */
+const TRACK_STRONG  = /\b(track|tracking|trackin|status|arrive|arrives|arriving|arrived|ship|ships|shipped|deliver|delivered|late|missing|lost|eta)\b/;
+/* "track"/"tracking" followed by a garment is a product, not a verb. */
+const TRACK_PRODUCT = /\btrack(ing)?\s+(pants?|jackets?|shorts?|suits?|shoes?|spikes?|tops?|shirts?|tees?|gear)\b/;
+/* Shopping questions are never order lookups, even when they contain a cue word
+   like "when" or a pronoun like "this" ("when will this be back in stock?"). */
+const SHOPPING_Q = /\b(in stock|stock|restock|restocking|available|availability|sale|price|prices|pricing|cost|costs|how much|size|sizes|sizing|chart|waterproof|colou?rs?|warranty|coupon|discount)\b/;
+/* A negated delivery verb is a tracking complaint even with no subject named
+   ("hasn't arrived yet"), unlike "when does the new collection arrive". */
+const NOT_DELIVERED = /\b(hasnt|havent|has not|have not|didnt|did not|never|still|not|no)\b[\s\w]{0,14}?\b(arriv\w*|receiv\w*|deliver\w*|came|come|shown|showed)\b/;
+
+function isTrack(text) {
+  const n = normalize(text);
+  if (TRACK_PRODUCT.test(n)) return false;
+  const subject = TRACK_SUBJECT.test(n);
+  /* A shopping question is not a lookup - unless it also names an order, i.e.
+     it is a tracking question that happens to mention price or size. */
+  if (SHOPPING_Q.test(n) && !subject) return false;
+  if (NOT_DELIVERED.test(n)) return true;
+  if (!TRACK_CUE.test(n)) return false;
+  if (subject) return true;
+  if (/\b\d{2,10}\b/.test(n)) return true;   /* "where is 111" */
+  if (TRACK_PRONOUN.test(n) && TRACK_STRONG.test(n)) return true;
+  /* A bare ask for tracking with no competing product noun. */
+  return /\btrack(ing|in)?\b/.test(n) && !/\b(pants?|jackets?|shorts?|suits?|shoes?|shirts?|tents?|bags?|boots?|gloves?)\b/.test(n);
 }
 function extractOrderNumber(text) {
   const m = text.replace(/#/g, " ").match(/\b(\d{1,10})\b/);
@@ -363,14 +397,15 @@ function goAgent() {
 
 /* Activity / condition detection shared by the recommendation flow, so details
    the user already gave ("what should I buy for camping?", "winter camping")
-   are used instead of re-asked. "ski" is matched as a whole word only —
-   substring matching would false-positive on words like "asking". */
+   are used instead of re-asked. Every term is matched on WORD BOUNDARIES:
+   substring matching would false-positive on "campus", "content", "asking",
+   "campaign" and send unrelated messages into the recommendation flow. */
 function detectActivity(n) {
-  if (n.includes("hik") || n.includes("trail") || n.includes("backpack")) return "hiking";
-  if (n.includes("camp") || n.includes("tent") || n.includes("sleep")) return "camping";
-  if (n.includes("climb") || n.includes("boulder")) return "climbing";
-  if (n.includes("winter") || n.includes("snow") ||
-      n.includes(" ski ") || n.includes(" skis ") || n.includes(" skiing ")) return "winter";
+  if (/\b(hikes?|hiking|hikers?|trails?|backpacks?|backpacking|backpackers?)\b/.test(n)) return "hiking";
+  if (/\b(camp|camps|camping|campsites?|campgrounds?|tents?)\b/.test(n) ||
+      /\bsleeping bags?\b|\bsleep systems?\b/.test(n)) return "camping";
+  if (/\b(climb|climbs|climbing|climbers?|boulders?|bouldering)\b/.test(n)) return "climbing";
+  if (/\b(winter|snow|snowy|snowboards?|snowboarding|snowshoes?|snowshoeing|ski|skis|skiing|skiers?)\b/.test(n)) return "winter";
   return null;
 }
 function detectCondition(n, lenient) {
@@ -512,7 +547,7 @@ function handle(raw) {
          bare "111") is a fresh request about ANOTHER order -> honor it. */
       const fuNum = extractOrderNumber(text);
       const fuBareish = fuNum && n.replace(/[0-9# ]/g, "").trim().length <= 6;
-      if (fuNum && (fuBareish || hasIntent(text, "track") || hasIntent(text, "recommend") || hasIntent(text, "shipping"))) {
+      if (fuNum && (fuBareish || isTrack(text) || hasIntent(text, "recommend") || hasIntent(text, "shipping"))) {
         state = "MENU";
         return menuRoute(text);
       }
@@ -523,7 +558,7 @@ function handle(raw) {
         return showMenu("Glad to hear it! 🏔️");
       }
       /* Number-less fresh request ("recommend a tent", "how fast is shipping") */
-      if (hasIntent(text, "track") || hasIntent(text, "recommend") || hasIntent(text, "shipping")) {
+      if (isTrack(text) || hasIntent(text, "recommend") || hasIntent(text, "shipping")) {
         state = "MENU";
         return menuRoute(text);
       }
@@ -542,7 +577,7 @@ function handle(raw) {
          number) -> honor it instead of forcing the activity question. */
       const rNum = extractOrderNumber(text);
       const rBareish = rNum && n.replace(/[0-9# ]/g, "").trim().length <= 6;
-      if (rBareish || hasIntent(text, "track") || hasIntent(text, "returns") || hasIntent(text, "shipping")) {
+      if (rBareish || isTrack(text) || hasIntent(text, "returns") || hasIntent(text, "shipping")) {
         state = "MENU";
         return menuRoute(text);
       }
@@ -568,7 +603,7 @@ function handle(raw) {
       /* Same topic-switch escape as RECO_ACTIVITY. */
       const cNum = extractOrderNumber(text);
       const cBareish = cNum && n.replace(/[0-9# ]/g, "").trim().length <= 6;
-      if (cBareish || hasIntent(text, "track") || hasIntent(text, "returns") || hasIntent(text, "shipping")) {
+      if (cBareish || isTrack(text) || hasIntent(text, "returns") || hasIntent(text, "shipping")) {
         state = "MENU";
         return menuRoute(text);
       }
@@ -602,8 +637,14 @@ function menuRoute(text) {
      Many users paste the number first. Only fires when the message is
      essentially just a number, so it can't hijack "recommend 2 tents". */
   const bareNum = extractOrderNumber(text);
-  if (bareNum && !hasIntent(text, "returns") && !hasIntent(text, "recommend") &&
-      normalize(text).replace(/[0-9# ]/g, "").trim().length <= 6) {
+  /* Only when the message is JUST the number once ordinary order-phrasing words
+     are stripped. A looser check let "size 10" or "under 200" be looked up as
+     order numbers and stranded the user in the order-number prompt. */
+  const numResidue = normalize(text)
+    .replace(/[0-9#]/g, " ")
+    .replace(/\b(order|orders|number|no|num|is|its|it|my|the|for|please|thanks|check|status)\b/g, " ")
+    .trim();
+  if (bareNum && !hasIntent(text, "returns") && !hasIntent(text, "recommend") && !numResidue) {
     fallbackCount = 0;
     if (ORDERS[bareNum]) {
       bot(ORDERS[bareNum]);
@@ -614,6 +655,13 @@ function menuRoute(text) {
     state = "AWAIT_ORDER";
     return chips(["Try another number", "⬅️ Main menu", "🧑‍💼 Talk to a live agent"]);
   }
+  /* Account changes are outside this bot's data; a human can do them. */
+  if (/\b(change|update|edit|correct)\b/.test(normalize(text)) &&
+      /\b(address|email|phone|account|password|payment)\b/.test(normalize(text))) {
+    fallbackCount = 0;
+    bot("I can't update account details myself, but a live agent can take care of that for you.");
+    return chips(["🧑‍💼 Talk to a live agent", "⬅️ Main menu"]);
+  }
   /* Cancellation asks: be honest — the bot can't cancel, a human can. Checked
      before intent matching so "cancel my order" isn't misread as tracking. */
   if (normalize(text).includes("cancel")) {
@@ -621,7 +669,12 @@ function menuRoute(text) {
     bot("I can't cancel an order myself, but a live agent can take care of that for you right away.");
     return chips(["🧑‍💼 Talk to a live agent", "⬅️ Main menu"]);
   }
-  const intent = matchIntent(text, ["returns", "track", "recommend", "shipping", "greet"]);
+  /* Priority matters: returns beats tracking ("return my order"), tracking beats
+     shipping ("where is my delivery" is a lookup, not a policy question) and
+     beats greet ("hi, where is my order?" is a request with a hello attached). */
+  const intent = matchIntent(text, ["returns"]) ||
+                 (isTrack(text) ? "track" : null) ||
+                 matchIntent(text, ["recommend", "shipping", "greet"]);
   if (intent) fallbackCount = 0;
   switch (intent) {
     case "track": {
@@ -651,11 +704,6 @@ function menuRoute(text) {
       return startReco(text);
     case "greet":
       return showMenu("Hey there, adventurer! 👋 Welcome to North Star.");
-    case "thanks":
-      return showMenu("Anytime! 🏔️");
-    case "bye":
-      bot("Happy trails! Come back any time. 🌲");
-      return chips(["⬅️ Main menu"]);
     default: {
       /* Unmatched sentences containing "help"/"options" get the menu, not a fallback.
          (Specific asks like "help me choose a gift" already matched their intent above.) */
@@ -668,6 +716,14 @@ function menuRoute(text) {
       if (fallbackCount >= 2 && isAnswer(text, "no")) return showMenu("No problem!");
       /* Every resolved flow ends with "Anything else I can help with?" —
          a plain "yes" re-opens the menu, a plain "no" closes politely. */
+      /* Gratitude and goodbyes: guarded by isAnswer so "perfect for winter?" and
+         "can I change it later?" are NOT read as thanks/goodbye. */
+      if (isAnswer(text, "thanks") || isAnswer(text, "thanksWeak", 2)) return showMenu("Anytime! 🏔️");
+      if (isAnswer(text, "bye") || isAnswer(text, "byeWeak", 3)) {
+        fallbackCount = 0;
+        bot("Happy trails! Come back any time. 🌲");
+        return chips(["⬅️ Main menu"]);
+      }
       if (isAnswer(text, "yes")) return showMenu("Sure — take your pick:");
       if (isAnswer(text, "no")) {
         fallbackCount = 0;
@@ -679,8 +735,8 @@ function menuRoute(text) {
          question about an existing order ("where is my tent?") is NOT shopping,
          so anything phrased as an inquiry about the user's own item is left to
          the fallback rather than guessed into a recommendation. */
-      const inquiry = / (where|wheres|when|status|arrive|arrived|arriving|deliver|delivered|delivery|my|mine|order|refund|return) /;
-      if (!inquiry.test(n2)) {
+      const inquiry = / (where|wheres|when|status|arrive|arrived|arriving|deliver|delivered|delivery|order|ordered|bought|purchased|refund|return|returned|broken|damaged) /;
+      if (!inquiry.test(n2) && !SHOPPING_Q.test(n2)) {
         const act2 = detectActivity(n2);
         if (act2) { fallbackCount = 0; return resolveReco(act2, n2); }
       }
