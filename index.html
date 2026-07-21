@@ -265,7 +265,7 @@ const INTENTS = {
   track: ["where is my order","wheres my order","track my package","track package",
           "track my order","track order","order status","status of my order",
           "find my order","check my order","package status","wheres my stuff",
-          "where is my package","wheres my package","my delivery","shipment status",
+          "where is my package","wheres my package","shipment status",
           "track my stuff","hasnt arrived","not arrived","didnt arrive","late order",
           "order tracking","track","tracking","my package","arrive","arriving",
           "when will my order","when will my package","where is order","wheres order",
@@ -273,7 +273,15 @@ const INTENTS = {
           "when will order","find order","my order","never arrived","never showed",
           "never came","never got","not delivered","not received","havent received",
           "didnt receive","dont have it","update on order","update on my order",
-          "order update","my purchase","wheres my","where is my"],
+          "order update","my purchase",
+          /* "Where is my X" is only a tracking request when X is something we
+             actually ship. A bare "where is my ..." pattern would swallow any
+             unknown noun ("where is my <abc>") into the tracking flow, so each
+             trackable noun is listed explicitly and anything else falls back. */
+          "where is my delivery","wheres my delivery","where is my shipment","wheres my shipment",
+          "where is my parcel","wheres my parcel","where is my item","wheres my item",
+          "where is my purchase","wheres my purchase","where is my stuff",
+          "where are my orders","wheres my orders","where are my items"],
   returns: ["return","returns","returning","exchange","exchanges","refund","refunds",
             "send back","send it back","money back","doesnt fit","wrong size","broken",
             "damaged","defective","return policy","broke","ripped","torn","faulty"],
@@ -282,7 +290,7 @@ const INTENTS = {
              "how long does delivery","shipping info","delivery"],
   recommend: ["recommend","recommendation","recommendations","suggestion","suggestions",
               "suggest","looking for","what should i buy","what should i get",
-              "help me choose","help me pick","gift","present","which product",
+              "help me choose","help me pick","gift for","gift idea","gift ideas","as a gift","which product",
               "shopping for","need gear","need equipment","browse","what do you sell",
               "show me products","buy something","recommend a product","want to buy",
               "buy a","in the market for"],
@@ -312,6 +320,18 @@ function hasIntent(text, name) {
 function matchIntent(text, names) {
   for (const name of names) if (hasIntent(text, name)) return name;
   return null;
+}
+/* Conversational replies ("ok", "fine", "no", "later", "perfect") are ordinary
+   English words that also appear inside genuine questions - "is this jacket ok
+   for rain?", "can I change my address later?", "which bag is perfect for cold
+   weather?". They only count as an ANSWER when the message is essentially just
+   that answer, so anything longer falls through to intent matching and, if
+   still unrecognized, to the fallback rather than being mistaken for
+   agreement, refusal, thanks, or goodbye. */
+function isAnswer(text, name) {
+  const n = normalize(text).trim();
+  if (!n) return false;
+  return n.split(/\s+/).length <= 5 && hasIntent(text, name);
 }
 function extractOrderNumber(text) {
   const m = text.replace(/#/g, " ").match(/\b(\d{1,10})\b/);
@@ -411,7 +431,7 @@ function handle(raw) {
       // In the simulated live-agent state the user may keep chatting or return.
       // Exit ONLY on an explicit menu/goodbye request, so ordinary replies like
       // "nothing major" or "no problem, one more thing" don't kick them out.
-      if (hasIntent(text, "menu") || hasIntent(text, "bye")) {
+      if (hasIntent(text, "menu") || isAnswer(text, "bye")) {
         setMode("bot");
         sys("You're back with the North Star Support Bot.");
         return showMenu("Welcome back!");
@@ -422,7 +442,7 @@ function handle(raw) {
 
     case "AWAIT_ORDER": {
       /* After two misses the bot offers a live agent — a typed "yes" accepts. */
-      if (fallbackCount >= 2 && hasIntent(text, "yes")) return goAgent();
+      if (fallbackCount >= 2 && isAnswer(text, "yes")) return goAgent();
       /* Fresh request instead of an order number (e.g. "actually, I want to
          return something", "recommend 2 tents") -> honor it rather than
          reading its digits as an order number or nagging for one. */
@@ -443,7 +463,7 @@ function handle(raw) {
         return chips(["Try another number", "⬅️ Main menu", "🧑‍💼 Talk to a live agent"]);
       }
       const nA = normalize(text);
-      if (hasIntent(text, "no") || hasIntent(text, "bye") || nA.includes("cancel") ||
+      if (isAnswer(text, "no") || isAnswer(text, "bye") || nA.includes("cancel") ||
           nA.includes("nevermind") || nA.includes("never mind") || nA.includes(" go back ") ||
           nA.includes("forget it")) return showMenu("No problem!");
       fallbackCount++;
@@ -481,7 +501,7 @@ function handle(raw) {
       }
       /* Complaints and negations: "no, it's not ok" / "that doesn't seem right" /
          "it was fine but late" must never read as "everything's fine" */
-      if (hasIntent(text, "no") || n.includes(" not ") || n.includes(" doesnt ") || n.includes(" dont ") ||
+      if (isAnswer(text, "no") || n.includes(" not ") || n.includes(" doesnt ") || n.includes(" dont ") ||
           n.includes(" isnt ") || n.includes(" wasnt ") || n.includes(" late ") ||
           hasIntent(text, "returns") || n.includes("wrong") || n.includes("problem") || n.includes("issue") || n.includes("missing")) {
         fallbackCount = 0;
@@ -498,7 +518,7 @@ function handle(raw) {
       }
       /* Yes-answers BEFORE number-less topic matching: "yes my order is fine"
          mentions "my order" but is an answer to our question, not a request. */
-      if (hasIntent(text, "yes") || hasIntent(text, "thanks")) {
+      if (isAnswer(text, "yes") || isAnswer(text, "thanks")) {
         fallbackCount = 0;
         return showMenu("Glad to hear it! 🏔️");
       }
@@ -514,7 +534,7 @@ function handle(raw) {
     case "RECO_ACTIVITY": {
       const n = normalize(text);
       /* After two misses the bot offers a live agent — a typed "yes" accepts. */
-      if (fallbackCount >= 2 && hasIntent(text, "yes")) return goAgent();
+      if (fallbackCount >= 2 && isAnswer(text, "yes")) return goAgent();
       /* "cancel" / "nevermind" -> drop the flow gracefully. */
       if (n.includes("cancel") || n.includes("nevermind") || n.includes("never mind") ||
           n.includes("forget it") || n.includes(" go back ")) return showMenu("No problem!");
@@ -542,7 +562,7 @@ function handle(raw) {
     case "RECO_COND": {
       const n = normalize(text);
       /* Same agent-offer acceptance and cancel escape as RECO_ACTIVITY. */
-      if (fallbackCount >= 2 && hasIntent(text, "yes")) return goAgent();
+      if (fallbackCount >= 2 && isAnswer(text, "yes")) return goAgent();
       if (n.includes("cancel") || n.includes("nevermind") || n.includes("never mind") ||
           n.includes("forget it") || n.includes(" go back ")) return showMenu("No problem!");
       /* Same topic-switch escape as RECO_ACTIVITY. */
@@ -601,7 +621,7 @@ function menuRoute(text) {
     bot("I can't cancel an order myself, but a live agent can take care of that for you right away.");
     return chips(["🧑‍💼 Talk to a live agent", "⬅️ Main menu"]);
   }
-  const intent = matchIntent(text, ["returns", "track", "recommend", "shipping", "greet", "thanks", "bye"]);
+  const intent = matchIntent(text, ["returns", "track", "recommend", "shipping", "greet"]);
   if (intent) fallbackCount = 0;
   switch (intent) {
     case "track": {
@@ -644,20 +664,26 @@ function menuRoute(text) {
       /* Answers to the bot's own questions. After two misses the bot ASKS
          "would you like me to connect you with a live agent?" — so "yes" here
          must connect, and "no" must gracefully drop back to the menu. */
-      if (fallbackCount >= 2 && hasIntent(text, "yes")) return goAgent();
-      if (fallbackCount >= 2 && hasIntent(text, "no")) return showMenu("No problem!");
+      if (fallbackCount >= 2 && isAnswer(text, "yes")) return goAgent();
+      if (fallbackCount >= 2 && isAnswer(text, "no")) return showMenu("No problem!");
       /* Every resolved flow ends with "Anything else I can help with?" —
          a plain "yes" re-opens the menu, a plain "no" closes politely. */
-      if (hasIntent(text, "yes")) return showMenu("Sure — take your pick:");
-      if (hasIntent(text, "no")) {
+      if (isAnswer(text, "yes")) return showMenu("Sure — take your pick:");
+      if (isAnswer(text, "no")) {
         fallbackCount = 0;
         bot("No problem — I'm right here if you need anything else. 👍");
         return chips(MENU_CHIPS);
       }
       /* A product or activity word on its own ("camping", "tents", "snowboarding")
-         is a shopping signal -> route into the recommendation flow. */
-      const act2 = detectActivity(n2);
-      if (act2) { fallbackCount = 0; return resolveReco(act2, n2); }
+         is a shopping signal -> route into the recommendation flow. But a
+         question about an existing order ("where is my tent?") is NOT shopping,
+         so anything phrased as an inquiry about the user's own item is left to
+         the fallback rather than guessed into a recommendation. */
+      const inquiry = / (where|wheres|when|status|arrive|arrived|arriving|deliver|delivered|delivery|my|mine|order|refund|return) /;
+      if (!inquiry.test(n2)) {
+        const act2 = detectActivity(n2);
+        if (act2) { fallbackCount = 0; return resolveReco(act2, n2); }
+      }
       /* ---------- Fallback handling ---------- */
       fallbackCount++;
       if (fallbackCount >= 2) {
