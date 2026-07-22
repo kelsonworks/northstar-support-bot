@@ -338,7 +338,7 @@ function isAnswer(text, name, maxWords) {
    the winter collection arrive") from being mistaken for an order lookup. */
 const TRACK_SUBJECT = /\b(orders?|packages?|parcels?|shipments?|deliver(y|ies)|items?|purchases?|stuff|box|mine)\b/;
 const TRACK_PRONOUN = /\b(it|this|that|they|them|these|those)\b/;
-const TRACK_CUE     = /\b(where|wheres|when|track|tracking|trackin|status|update|updates|check|find|locate|arrive|arrives|arriving|arrived|ship|ships|shipped|deliver|delivered|late|missing|lost|eta)\b/;
+const TRACK_CUE     = /\b(where|wheres|when|whens|how|hows|track|tracking|trackin|status|update|updates|check|find|locate|arrive|arrives|arriving|arrived|ship|ships|shipped|deliver|delivered|late|missing|lost|eta)\b/;
 /* A pronoun standing in for the order ("when is it arriving?") needs a
    delivery-specific cue; "where"/"when" alone would catch idle chatter
    like "when will it stop raining". */

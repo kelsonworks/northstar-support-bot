@@ -6,6 +6,11 @@ store, built for the Upwork Talent Accelerator simulated project
 
 **Zero setup. Zero API keys. Zero dependencies.**
 
+## Demo video
+
+A 2-3 minute walkthrough covering all four use cases, fallback handling, and the
+live-agent handoff accompanies this delivery (submitted with the project files).
+
 ## How to run
 
 Open `index.html` in any modern browser. That's it.
