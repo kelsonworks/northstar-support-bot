@@ -29,7 +29,7 @@ Everything runs client-side with deterministic logic and the provided mock data.
 | **2. Returns & Exchanges** | Say "I want to return something" → 30-day policy, unused items, original packaging + returns link |
 | **3. Product Recommendations** | Say "Recommend a product" or "what should I buy" → 2 clarifying questions (activity, conditions) → recommends a product category |
 | **4. Human Handoff** | Say "talk to a live agent" — or, after two unrecognized inputs, accept the bot's live-agent offer (tap the chip or just say "yes") → clear transfer notice, header badge switches to **Live Agent**, simulated agent (Riley) takes over, user can keep chatting or return to the main menu |
-| **Intent recognition** | Whole-word/phrase matching with many variations per intent ("Where is my order?", "track my package", "order status", "where's my stuff", etc.). Apostrophes and punctuation are normalized. |
+| **Intent recognition** | Whole-word/phrase matching with many variations per intent ("Where is my order?", "track my package", "order status", "where's my stuff", etc.). Apostrophes and punctuation are normalized. Order tracking additionally requires both a subject and a cue, so an unrecognized noun ("Where is my \<abc\>?") falls back instead of being guessed into a lookup. |
 | **Conversation flow** | Guided flows with quick-reply chips at every step; every resolved flow returns the user to the main menu |
 | **Shipping info** | Say "shipping info" → Standard 3-5 business days, Expedited 1-2 business days (also included with recommendations) |
 | **Fallback handling** | Unrecognized input → clear "I didn't quite catch that" + option chips; a second consecutive miss offers escalation to a live agent |
@@ -49,7 +49,17 @@ Everything runs client-side with deterministic logic and the provided mock data.
 ## Architecture (single self-contained file)
 
 - **Mock data layer** — order statuses and policies exactly as provided in the brief
-- **Intent engine** — normalized whole-word/phrase matching across 11 intents with extensive phrasing variations
+- **Intent engine** — normalized whole-word/phrase matching with extensive phrasing
+  variations. Two rules keep it from over-matching:
+  - **Order tracking needs a subject and a cue.** A lookup must name something
+    shippable (order, package, delivery, an order number, or a pronoun standing
+    in for one) *and* ask a tracking question (where, when, status, arrived,
+    late). Shopping questions about stock, price, or size are excluded. This is
+    why "Where is my order?" is a lookup and "Where is my \<abc\>?" is not.
+  - **Short replies only count when they are the reply.** Words like "ok",
+    "fine", "later" and "perfect" are ordinary English, so they register as
+    agreement, refusal, thanks, or goodbye only when the message is essentially
+    just that word — "Is this jacket ok for rain?" is a question, not a yes.
 - **State machine** — `MENU`, `AWAIT_ORDER`, `DELIVERED_FU`, `RECO_ACTIVITY`, `RECO_COND`, `AGENT`. A request for a live agent or the main menu is honored from any bot state; the live-agent chat manages its own exit so ordinary words don't eject the user. A consecutive-miss counter offers escalation to a human.
 - **UI layer** — chat rendering with typing indicator, quick-reply chips, live-agent mode badge, reset button, keyboard and click input, `aria-live` for accessibility
 
